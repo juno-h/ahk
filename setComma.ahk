@@ -1,4 +1,5 @@
 ; insert comma 
+; 1,000 units of numerical column
 setComma(number) {
 	temp := ""
 	SplitNumber := StrSplit(number,"") , maxcount := SplitNumber.count()+1

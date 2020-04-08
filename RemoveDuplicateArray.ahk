@@ -9,7 +9,7 @@ RemoveDuplicateArray(array){
 				break
 			}
 		}
-		check ? "" : temp.push(val) 
+		(val and !check) ? temp.push(val) : ""
 	}
 	return temp
 }

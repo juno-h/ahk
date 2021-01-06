@@ -59,8 +59,6 @@ Class LDAP
                         exit
                 }       
         }
-
-
         AddOrganizationalUnit(DN , OUname)
         {
                 objADSI	:= ComObjGet("LDAP://" DN)
@@ -78,5 +76,4 @@ Class LDAP
                 }
                 return
         }
-
 }

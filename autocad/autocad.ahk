@@ -1,18 +1,47 @@
+; edit , 2020-11-12
+; 2021-10-14 ZWCAD 추가
 Class autocad
 {
-	__new(mode)
+	__new(mode)		; 2021-10-14
+	{	
+		this.isAutocad(mode)
+		isautocad := isobject(this.acad)
+		if !isautocad
+		{			
+			this.isZWcad(mode)
+			iszwcad := isobject(this.acad)		
+			if !iszwcad
+			{			
+				msgbox , 16 , error, please open CAD program ...
+				exitapp 
+			}
+		}
+	}
+	isAutocad(mode)	; 2021-10-14
 	{
 		try {
 			this.acad 	:= 	(mode == "active") ? ComObjActive("AutoCAD.Application")
-					: 	(mode == "create") ? ComObjCreate("AutoCAD.Application") 
-					: 	""
-
-		} catch e {
-			msgbox , 16 , error, please open AutoCAD ..
-			exit 
+						: 	(mode == "create") ? ComObjCreate("AutoCAD.Application") 
+						: 	""
+			return this
+		} catch e
+		{
+			return false
 		}
 	}
-
+	isZWcad(mode)	; 2021-10-14
+	{
+		try {
+			this.acad 	:= 	(mode == "active") ? ComObjActive("ZWCAD.Application")
+						: 	(mode == "create") ? ComObjCreate("ZWCAD.Application") 
+						: 	""
+			return this
+		} catch e
+		{
+			return false
+		}
+		
+	}
 	Visible(mode := true)
 	{
 		this.acad.Visible 	:= mode			
@@ -23,6 +52,24 @@ Class autocad
 	{
 		this.Drawing := this.acad.ActiveDocument
 		return this.Drawing
+	}
+	getDocumentName()
+	{
+		try
+			this.Drawing.name
+		catch
+		{
+			WinActivate % this.acad.Caption			
+			SendInput , {ESC}
+			sleep,300
+		}
+		return this.Drawing.name
+	}
+	update()
+	{
+		; this.acad.ActiveDocument.Regen(1)
+		this.acad.Update()
+		return this
 	}
 	SelectionSetsClear()
 	{	
@@ -71,11 +118,36 @@ Class autocad
 		return this
 	}
 
-	addLayers( layer )
+	addLayers(layer , color := "")
 	{
-		object := this.Drawing.Layers.Add(layer)  
-		return object
+		if !this.hasLayer(layer) {
+			object := this.Drawing.Layers.Add(layer)  
+			object.color := color ? color : 7
+		}
+		return this
 	}
+	; getLayerList()
+	; {
+	; 	layers := this.Drawing.layers
+	; 	for obj in layers
+	; 		msgbox % obj.name
+	; 	return object
+	; }
+	hasLayer(layer_name)
+	{
+		layers := this.Drawing.layers
+		for obj in layers
+		{
+			if (layer_name = obj.name)
+			{
+				this.hasLayer := True
+				return True
+			}
+		}
+		this.hasLayer := False
+		return False
+	}
+
 	LoadLinetypes( Linetype )
 	{
 		object := this.Drawing.Linetypes.Load(Linetype, "acad.lin")
@@ -94,8 +166,8 @@ Class autocad
 	addCircle( X , Y,  Radius , layer := "" , color := "")
 	{
 		object := this.Drawing.ModelSpace.AddCircle(acdPoint([X , Y ,0.0]) , Radius)
-  		layer ? this.CheckLayer(object , layer) : ""
-  		object.color := color
+  		layer ? (object.layer := layer) : ""
+  		color ? (object.color := color) : ""
   		object.Update
   		return  object
 	}
@@ -194,6 +266,44 @@ Class autocad
 		}
 		return this
 	}
+	; 블럭 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────	2021-10-27
+	Block_add(X , Y, block_name , block_color , insert_object)								; 블럭 생성
+	{
+		this.block_pos 		:= acdPoint([X , Y ,0.0])										; 블럭 센터 좌표
+		this.block_name		:= block_name
+		this.block_object 	:= this.Drawing.Blocks.AddText(this.block_pos , block_name)		; 블럭 객체 선언
+		; this.block_object	로 객체 생성 , AddPoint / AddCircle / AddPLline / addText 등 (Class 내 함수 사용 불가)
+		; 객체의 option은 별도 설정 , Color 등
+		; ex) 	object.block_object.AddCircle(Point3d(point["X:" A_index], point["Y:" A_index], "0.0"), point["size:" A_index]))  		
+		; 		object.block_object.AddPoint(Point3d(point["X:" A_index], point["Y:" A_index], "0.0"))
+		return this
+	}
+	Block_insert()
+	{
+		; Block_add 로 블럭을 생성 후 실행
+		; Block_add -> 블럭객체로 블럭을 묶을 객체 담음 -> Block_insert
+		block_object := this.Drawing.ModelSpace.InsertBlock(this.block_pos , this.block_name , 1 , 1 , 1 , 0 )
+		block_object.update
+		return this
+	}
+	Block_box( X , Y, w, h, layer := "" )
+	{	
+		; box는 함수가 필요함으로 추가 함
+		pt := ComObjArray(5, 8) ; VT_R8 = 5																																
+		pt[0] := pt[2] 	:= 	X - w																																		
+		pt[1] := pt[7] 	:=	Y - h																																						 
+		pt[3] := pt[5] 	:= 	Y + h																																							
+		pt[4] := pt[6] 	:= 	X + w		
+		object 			:= this.block_object.AddLightWeightPolyline(pt)
+		object.Closed 	:= True				; 객체 닫기		  		
+  		return  this
+	}
+	Block_IntersectWith(block_obj , option := "1" )
+	{	
+  		return  this.Drawing.Blocks.IntersectWith(block_obj , option)
+	}
+	; Get_block_info
+	; ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 	delete(object)
 	{
 		object.Delete
@@ -257,11 +367,20 @@ Class autocad
 			exit
 		}
 	}
+	getCirclePont()
+	{
+
+	}
 	SetString(String)
 	{
 		object.TextString := String
 		object.update
 		return this
+	}
+	ZoomScreen(x , y , magnification)
+	{
+		this.Drawing.Application.ZoomCenter(acdPoint([x , y , "0.0"]) , magnification)
+		return
 	}
 
 }
